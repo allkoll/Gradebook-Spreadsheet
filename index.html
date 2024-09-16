@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Gradebook</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        h1 {
+            text-align: center;
+        }
+        label {
+            margin-right: 10px;
+        }
+        #controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        table {
+            width: 50%;
+            margin: 0 auto 20px auto;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #000;
+            padding: 5px;
+            text-align: center;
+        }
+        .score-select {
+            width: 60px;
+            padding: 2px;
+            color: #000;
+            font-weight: bold;
+            border: none;
+            outline: none;
+        }
+        .score-4 {
+            background-color: #00c5ff;
+        }
+        .score-3 {
+            background-color: #00ff04;
+        }
+        .score-2 {
+            background-color: #fdff00;
+        }
+        .score-1 {
+            background-color: #ff1837;
+        }
+        #pieChartContainer {
+            width: 50%;
+            margin: 0 auto;
+        }
+        #downloadBtn {
+            display: block;
+            margin: 0 auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>Gradebook</h1>
+
+    <div id="controls">
+        <label for="skillName">Skill Name:</label>
+        <input type="text" id="skillName" placeholder="Enter skill name">
+        <label for="assessmentName">Assessment Name:</label>
+        <input type="text" id="assessmentName" placeholder="Enter assessment name">
+    </div>
+
+    <table id="gradeTable">
+        <thead>
+            <tr>
+                <th>Student</th>
+                <th>Score</th>
+            </tr>
+        </thead>
+        <tbody>
+            <!-- Rows will be added by JavaScript -->
+        </tbody>
+    </table>
+
+    <div id="pieChartContainer">
+        <canvas id="pieChart"></canvas>
+    </div>
+
+    <button id="downloadBtn">Download Spreadsheet</button>
+
+    <!-- Include Chart.js from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <script>
+        // JavaScript code to create table rows and functionality
+        const tableBody = document.querySelector('#gradeTable tbody');
+
+        // Create table rows for students 1-30
+        for (let i = 1; i <= 30; i++) {
+            const row = document.createElement('tr');
+
+            const studentCell = document.createElement('td');
+            studentCell.textContent = 'Student ' + i;
+            row.appendChild(studentCell);
+
+            const scoreCell = document.createElement('td');
+
+            const select = document.createElement('select');
+            select.className = 'score-select';
+            const scores = [4, 3, 2, 1];
+            scores.forEach(score => {
+                const option = document.createElement('option');
+                option.value = score;
+                option.text = score;
+                select.appendChild(option);
+            });
+
+            // Event listener to update cell color and chart
+            select.addEventListener('change', function() {
+                updateCellColor(select);
+                updateChart();
+            });
+
+            scoreCell.appendChild(select);
+            row.appendChild(scoreCell);
+
+            tableBody.appendChild(row);
+
+            // Initialize cell color
+            updateCellColor(select);
+        }
+
+        // Function to update cell background color based on score
+        function updateCellColor(selectElement) {
+            const score = selectElement.value;
+            selectElement.className = 'score-select score-' + score;
+        }
+
+        // Function to update the pie chart
+        let pieChart;
+
+        function updateChart() {
+            const scoreCounts = {4: 0, 3: 0, 2: 0, 1: 0};
+            const selects = document.querySelectorAll('.score-select');
+            selects.forEach(select => {
+                const score = select.value;
+                scoreCounts[score]++;
+            });
+
+            const total = selects.length;
+            const percentages = [
+                ((scoreCounts[4] / total) * 100).toFixed(2),
+                ((scoreCounts[3] / total) * 100).toFixed(2),
+                ((scoreCounts[2] / total) * 100).toFixed(2),
+                ((scoreCounts[1] / total) * 100).toFixed(2)
+            ];
+
+            const ctx = document.getElementById('pieChart').getContext('2d');
+
+            if (pieChart) {
+                pieChart.data.datasets[0].data = percentages;
+                pieChart.update();
+            } else {
+                pieChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: ['4', '3', '2', '1'],
+                        datasets: [{
+                            data: percentages,
+                            backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837'],
+                        }]
+                    },
+                    options: {
+                        plugins: {
+                            legend: {
+                                display: true,
+                                position: 'top',
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        const label = context.label || '';
+                                        const value = context.raw;
+                                        return label + ': ' + value + '%';
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+        }
+
+        // Initial chart update
+        updateChart();
+
+        // Download spreadsheet functionality
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            // Collect data
+            const skillName = document.getElementById('skillName').value;
+            const assessmentName = document.getElementById('assessmentName').value;
+
+            const data = [['Student', 'Score']];
+            const rows = document.querySelectorAll('#gradeTable tbody tr');
+            rows.forEach(row => {
+                const student = row.cells[0].textContent;
+                const score = row.cells[1].querySelector('select').value;
+                data.push([student, score]);
+            });
+
+            // Convert to CSV
+            let csvContent = "data:text/csv;charset=utf-8,";
+            csvContent += 'Skill Name,' + skillName + '\n';
+            csvContent += 'Assessment Name,' + assessmentName + '\n\n';
+            data.forEach(rowArray => {
+                const row = rowArray.join(",");
+                csvContent += row + "\r\n";
+            });
+
+            // Create a link to download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "gradebook.csv");
+            document.body.appendChild(link); // Required for FF
+
+            link.click(); // This will download the data file named "gradebook.csv"
+            document.body.removeChild(link);
+        });
+
+    </script>
+</body>
+</html>
