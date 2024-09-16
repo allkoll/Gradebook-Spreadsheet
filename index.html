@@ -83,6 +83,11 @@
         #gradeTable th, #gradeTable td {
             width: 80px;
         }
+        /* Narrower columns for Letter and SEP averages */
+        .narrow-column {
+            width: 50px;
+        }
+        /* Wider column for Student names */
         #gradeTable th:first-child, #gradeTable td:first-child {
             width: 150px; /* Adjust as needed for the 'Student' column */
         }
@@ -120,18 +125,18 @@
         <thead>
             <!-- Proficiency Percentage Row -->
             <tr id="proficiencyRow" class="proficiency-row">
-                <th colspan="2">Proficiency %</th>
-                <th>SEP2 Avg</th>
-                <th>SEP4 Avg</th>
-                <th>SEP6 Avg</th>
+                <th colspan="2"></th>
+                <th class="narrow-column"></th>
+                <th class="narrow-column"></th>
+                <th class="narrow-column"></th>
                 <!-- Percentages will be added here -->
             </tr>
             <tr id="skillRow">
                 <th contenteditable="false">Student</th>
-                <th contenteditable="false">Letter Grade</th>
-                <th class="vertical-text">SEP2</th>
-                <th class="vertical-text">SEP4</th>
-                <th class="vertical-text">SEP6</th>
+                <th contenteditable="false" class="narrow-column">Letter</th>
+                <th class="vertical-text narrow-column">SEP2 Avg</th>
+                <th class="vertical-text narrow-column">SEP4 Avg</th>
+                <th class="vertical-text narrow-column">SEP6 Avg</th>
                 <!-- Skill dropdowns will be added here -->
             </tr>
             <tr id="assessmentRow">
@@ -200,14 +205,14 @@
             row.appendChild(studentCell);
 
             const letterGradeCell = document.createElement('td');
-            letterGradeCell.className = 'letter-grade';
+            letterGradeCell.className = 'letter-grade narrow-column';
             letterGradeCell.textContent = 'N/A';
             row.appendChild(letterGradeCell);
 
             // Add SEP average cells
             seps.forEach(sep => {
                 const sepCell = document.createElement('td');
-                sepCell.className = 'sep-average-cell';
+                sepCell.className = 'sep-average-cell narrow-column';
                 sepCell.dataset.sep = sep;
                 sepCell.textContent = 'N/A';
                 row.appendChild(sepCell);
@@ -388,7 +393,7 @@
             const tableRect = gradeTable.getBoundingClientRect();
             const headers = skillRow.querySelectorAll('th');
             headers.forEach((header, index) => {
-                if (index <= 4) return; // Skip the first 5 columns (Student, Letter Grade, SEP2, SEP4, SEP6)
+                if (index <= 4) return; // Skip the first 5 columns (Student, Letter, SEP2 Avg, SEP4 Avg, SEP6 Avg)
                 const rect = header.getBoundingClientRect();
                 const left = rect.left - tableRect.left;
                 const width = rect.width;
