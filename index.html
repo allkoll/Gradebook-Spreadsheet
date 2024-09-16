@@ -31,7 +31,7 @@
         th[contenteditable="true"]:focus, td[contenteditable="true"]:focus {
             outline: 2px solid blue;
         }
-        .score-select {
+        .score-select, .skill-select {
             width: 100%;
             padding: 2px;
             color: #000;
@@ -91,6 +91,10 @@
             font-weight: bold;
             background-color: #f0f0f0;
         }
+        /* Style for the letter grade column */
+        .letter-grade {
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -110,14 +114,16 @@
         <thead>
             <!-- Proficiency Percentage Row -->
             <tr id="proficiencyRow" class="proficiency-row">
-                <th>Proficiency %</th>
+                <th colspan="2">Proficiency %</th>
                 <!-- Percentages will be added here -->
             </tr>
             <tr id="skillRow">
                 <th contenteditable="false">Student</th>
-                <!-- Skill names will be added here -->
+                <th contenteditable="false">Letter Grade</th>
+                <!-- Skill dropdowns will be added here -->
             </tr>
             <tr id="assessmentRow">
+                <th></th>
                 <th></th>
                 <!-- Assessment names will be added here -->
             </tr>
@@ -125,6 +131,12 @@
         <tbody>
             <!-- Student rows will be added here -->
         </tbody>
+        <tfoot>
+            <tr id="sepAverages">
+                <th colspan="2">SEP Averages</th>
+                <!-- SEP averages will be added here -->
+            </tr>
+        </tfoot>
     </table>
 
     <!-- Include Chart.js, ChartDataLabels, jsPDF, and html2canvas from CDN -->
@@ -140,13 +152,15 @@
         const skillRow = document.getElementById('skillRow');
         const assessmentRow = document.getElementById('assessmentRow');
         const tableBody = gradeTable.querySelector('tbody');
+        const sepAveragesRow = document.getElementById('sepAverages');
         const chartContainer = document.getElementById('chartContainer');
         let skills = [];
+        const seps = ['SEP2', 'SEP4', 'SEP6'];
 
-        // Function to initialize the table with 10 skills/assessments
+        // Function to initialize the table with 3 skills/assessments
         function initializeSkills() {
-            for (let i = 0; i < 10; i++) {
-                addSkill('Skill', 'Assessment');
+            for (let i = 0; i < 3; i++) {
+                addSkill('Assessment ' + (i + 1));
             }
         }
 
@@ -159,7 +173,7 @@
 
         // Function to add a new skill/assessment column
         document.getElementById('addSkillBtn').addEventListener('click', function() {
-            addSkill('Skill', 'Assessment');
+            addSkill('Assessment');
         });
 
         // Function to add a new student
@@ -177,19 +191,33 @@
             studentCell.textContent = studentName;
             row.appendChild(studentCell);
 
+            const letterGradeCell = document.createElement('td');
+            letterGradeCell.className = 'letter-grade';
+            letterGradeCell.textContent = 'N/A';
+            row.appendChild(letterGradeCell);
+
             // Add score cells for existing skills
             for (let j = 0; j < skills.length; j++) {
                 const scoreCell = createScoreCell(j);
                 row.appendChild(scoreCell);
             }
 
+            // Add SEP average cells
+            seps.forEach(sep => {
+                const sepCell = document.createElement('td');
+                sepCell.className = 'sep-average-cell';
+                sepCell.dataset.sep = sep;
+                sepCell.textContent = 'N/A';
+                row.appendChild(sepCell);
+            });
+
             tableBody.appendChild(row);
         }
 
         // Function to add a skill
-        function addSkill(skillName, assessmentName) {
+        function addSkill(assessmentName) {
             const skillIndex = skills.length;
-            skills.push({ skillName, assessmentName });
+            skills.push({ skillName: '', assessmentName, sep: 'SEP2' });
 
             // Add proficiency percentage cell
             const proficiencyCell = document.createElement('th');
@@ -197,24 +225,34 @@
             proficiencyCell.dataset.skillIndex = skillIndex;
             proficiencyRow.appendChild(proficiencyCell);
 
-            // Add skill and assessment headers
+            // Add skill dropdown in the skill row
             const skillHeader = document.createElement('th');
-            skillHeader.contentEditable = true;
-            skillHeader.textContent = skillName;
-            skillHeader.dataset.skillIndex = skillIndex;
+            const skillSelect = document.createElement('select');
+            skillSelect.className = 'skill-select';
+            skillSelect.dataset.skillIndex = skillIndex;
+            seps.forEach(sep => {
+                const option = document.createElement('option');
+                option.value = sep;
+                option.textContent = sep;
+                skillSelect.appendChild(option);
+            });
+            skillHeader.appendChild(skillSelect);
             skillRow.appendChild(skillHeader);
 
+            // Event listener to update skill SEP
+            skillSelect.addEventListener('change', function() {
+                skills[skillIndex].sep = skillSelect.value;
+                calculateSEPAverages();
+            });
+
+            // Add assessment name cell
             const assessmentHeader = document.createElement('th');
             assessmentHeader.contentEditable = true;
             assessmentHeader.textContent = assessmentName;
             assessmentHeader.dataset.skillIndex = skillIndex;
             assessmentRow.appendChild(assessmentHeader);
 
-            // Add event listeners to header cells to update skill names
-            skillHeader.addEventListener('blur', function() {
-                skills[skillIndex].skillName = skillHeader.textContent;
-            });
-
+            // Add event listener to update assessment name
             assessmentHeader.addEventListener('blur', function() {
                 skills[skillIndex].assessmentName = assessmentHeader.textContent;
             });
@@ -223,8 +261,18 @@
             const studentRows = tableBody.querySelectorAll('tr');
             studentRows.forEach(row => {
                 const scoreCell = createScoreCell(skillIndex);
-                row.appendChild(scoreCell);
+                // Insert before the SEP average cells
+                row.insertBefore(scoreCell, row.querySelector('.sep-average-cell'));
             });
+
+            // Adjust SEP averages row
+            if (sepAveragesRow.children.length === 2) {
+                seps.forEach(sep => {
+                    const sepHeader = document.createElement('th');
+                    sepHeader.textContent = sep;
+                    sepAveragesRow.appendChild(sepHeader);
+                });
+            }
 
             // Create chart
             createChart(skillIndex);
@@ -254,6 +302,8 @@
                 updateCellColor(select);
                 updateCharts();
                 updateProficiencyPercentages();
+                calculateSEPAverages();
+                calculateLetterGrades();
             });
 
             scoreCell.appendChild(select);
@@ -339,11 +389,11 @@
             const tableRect = gradeTable.getBoundingClientRect();
             const headers = skillRow.querySelectorAll('th');
             headers.forEach((header, index) => {
-                if (index === 0) return; // Skip the first 'Student' column
+                if (index <= 1) return; // Skip the first two columns
                 const rect = header.getBoundingClientRect();
                 const left = rect.left - tableRect.left;
                 const width = rect.width;
-                const chartWrapper = document.getElementById('chartWrapper-' + (index - 1));
+                const chartWrapper = document.getElementById('chartWrapper-' + (index - 2));
                 chartWrapper.style.left = left + 'px';
                 chartWrapper.style.width = width + 'px';
             });
@@ -387,8 +437,8 @@
         function updateProficiencyPercentages() {
             const proficiencyCells = proficiencyRow.querySelectorAll('th');
             proficiencyCells.forEach((cell, index) => {
-                if (index === 0) return; // Skip the first cell
-                const skillIndex = index - 1;
+                if (index <= 1) return; // Skip the first two cells
+                const skillIndex = index - 2;
                 const selects = document.querySelectorAll('.score-select[data-skill-index="' + skillIndex + '"]');
                 let total = 0;
                 let proficientCount = 0;
@@ -406,10 +456,79 @@
             });
         }
 
+        // Function to calculate SEP averages and update SEP average cells
+        function calculateSEPAverages() {
+            const studentRows = tableBody.querySelectorAll('tr');
+            studentRows.forEach(row => {
+                const sepSums = {'SEP2': 0, 'SEP4': 0, 'SEP6': 0};
+                const sepCounts = {'SEP2': 0, 'SEP4': 0, 'SEP6': 0};
+
+                // Get all score selects in the row
+                const selects = row.querySelectorAll('.score-select');
+                selects.forEach(select => {
+                    const skillIndex = select.dataset.skillIndex;
+                    const sep = skills[skillIndex].sep;
+                    const score = select.value;
+                    if (score !== '' && score !== 'N') {
+                        sepSums[sep] += parseFloat(score);
+                        sepCounts[sep]++;
+                    }
+                });
+
+                // Update SEP average cells
+                seps.forEach(sep => {
+                    const avgCell = row.querySelector('.sep-average-cell[data-sep="' + sep + '"]');
+                    if (sepCounts[sep] > 0) {
+                        const average = (sepSums[sep] / sepCounts[sep]).toFixed(2);
+                        avgCell.textContent = average;
+                        avgCell.dataset.average = average;
+                    } else {
+                        avgCell.textContent = 'N/A';
+                        avgCell.dataset.average = '';
+                    }
+                });
+            });
+        }
+
+        // Function to calculate letter grades
+        function calculateLetterGrades() {
+            const studentRows = tableBody.querySelectorAll('tr');
+            studentRows.forEach(row => {
+                let totalAverage = 0;
+                let sepCount = 0;
+                const avgCells = row.querySelectorAll('.sep-average-cell');
+                avgCells.forEach(cell => {
+                    const avg = cell.dataset.average;
+                    if (avg) {
+                        totalAverage += parseFloat(avg);
+                        sepCount++;
+                    }
+                });
+
+                const letterGradeCell = row.children[1];
+                if (sepCount > 0) {
+                    const overallAverage = totalAverage / sepCount;
+                    let letterGrade = '';
+                    if (overallAverage >= 3.5) {
+                        letterGrade = 'A';
+                    } else if (overallAverage >= 2.5) {
+                        letterGrade = 'B';
+                    } else if (overallAverage >= 1.5) {
+                        letterGrade = 'C';
+                    } else {
+                        letterGrade = 'F';
+                    }
+                    letterGradeCell.textContent = letterGrade;
+                } else {
+                    letterGradeCell.textContent = 'N/A';
+                }
+            });
+        }
+
         // Adjust chart positions when window is resized
         window.addEventListener('resize', adjustChartPositions);
 
-        // Initialize table with 10 skills and 10 students
+        // Initialize table with 3 skills and 10 students
         initializeSkills();
         initializeStudents();
 
