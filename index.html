@@ -441,8 +441,8 @@
         function updateProficiencyPercentages() {
             const proficiencyCells = proficiencyRow.querySelectorAll('th');
             proficiencyCells.forEach((cell, index) => {
-                if (index <= 4) return; // Skip the first 5 cells
-                const skillIndex = index - 5;
+                if (index <= 3) return; // Skip the first 4 cells
+                const skillIndex = index - 4;
                 const selects = document.querySelectorAll('.score-select[data-skill-index="' + skillIndex + '"]');
                 let total = 0;
                 let proficientCount = 0;
