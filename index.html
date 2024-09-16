@@ -86,6 +86,11 @@
         #gradeTable th:first-child, #gradeTable td:first-child {
             width: 150px; /* Adjust as needed for the 'Student' column */
         }
+        /* Style for the proficiency percentage row */
+        .proficiency-row th {
+            font-weight: bold;
+            background-color: #f0f0f0;
+        }
     </style>
 </head>
 <body>
@@ -94,7 +99,7 @@
     <div id="controls">
         <button id="addStudentBtn">Add Student</button>
         <button id="addSkillBtn">Add Column</button>
-        <button id="downloadBtn">Download Spreadsheet</button>
+        <button id="downloadBtn">Download PDF</button>
     </div>
 
     <div class="chart-container" id="chartContainer">
@@ -103,6 +108,11 @@
 
     <table id="gradeTable">
         <thead>
+            <!-- Proficiency Percentage Row -->
+            <tr id="proficiencyRow" class="proficiency-row">
+                <th>Proficiency %</th>
+                <!-- Percentages will be added here -->
+            </tr>
             <tr id="skillRow">
                 <th contenteditable="false">Student</th>
                 <!-- Skill names will be added here -->
@@ -117,13 +127,16 @@
         </tbody>
     </table>
 
-    <!-- Include Chart.js and ChartDataLabels from CDN -->
+    <!-- Include Chart.js, ChartDataLabels, jsPDF, and html2canvas from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+    <script src="https://cdn.jsdelivr.net/npm/jspdf"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas"></script>
 
     <script>
         // Initialize variables
         const gradeTable = document.getElementById('gradeTable');
+        const proficiencyRow = document.getElementById('proficiencyRow');
         const skillRow = document.getElementById('skillRow');
         const assessmentRow = document.getElementById('assessmentRow');
         const tableBody = gradeTable.querySelector('tbody');
@@ -178,6 +191,12 @@
             const skillIndex = skills.length;
             skills.push({ skillName, assessmentName });
 
+            // Add proficiency percentage cell
+            const proficiencyCell = document.createElement('th');
+            proficiencyCell.textContent = '0%';
+            proficiencyCell.dataset.skillIndex = skillIndex;
+            proficiencyRow.appendChild(proficiencyCell);
+
             // Add skill and assessment headers
             const skillHeader = document.createElement('th');
             skillHeader.contentEditable = true;
@@ -210,8 +229,9 @@
             // Create chart
             createChart(skillIndex);
 
-            // Update charts
+            // Update charts and proficiency percentages
             updateCharts();
+            updateProficiencyPercentages();
         }
 
         // Function to create score cell
@@ -229,10 +249,11 @@
                 select.appendChild(option);
             });
 
-            // Event listener to update cell color and charts
+            // Event listener to update cell color, charts, and proficiency percentages
             select.addEventListener('change', function() {
                 updateCellColor(select);
                 updateCharts();
+                updateProficiencyPercentages();
             });
 
             scoreCell.appendChild(select);
@@ -362,6 +383,29 @@
             chart.update();
         }
 
+        // Function to update proficiency percentages
+        function updateProficiencyPercentages() {
+            const proficiencyCells = proficiencyRow.querySelectorAll('th');
+            proficiencyCells.forEach((cell, index) => {
+                if (index === 0) return; // Skip the first cell
+                const skillIndex = index - 1;
+                const selects = document.querySelectorAll('.score-select[data-skill-index="' + skillIndex + '"]');
+                let total = 0;
+                let proficientCount = 0;
+                selects.forEach(select => {
+                    const score = select.value;
+                    if (score !== '') {
+                        total++;
+                        if (score === '3' || score === '4') {
+                            proficientCount++;
+                        }
+                    }
+                });
+                const proficiencyPercentage = total > 0 ? ((proficientCount / total) * 100).toFixed(2) + '%' : '0%';
+                cell.textContent = proficiencyPercentage;
+            });
+        }
+
         // Adjust chart positions when window is resized
         window.addEventListener('resize', adjustChartPositions);
 
@@ -369,50 +413,43 @@
         initializeSkills();
         initializeStudents();
 
-        // Download spreadsheet functionality
+        // PDF Download functionality
         document.getElementById('downloadBtn').addEventListener('click', function() {
-            // Collect data
-            const data = [];
+            // Disable the download button to prevent multiple clicks
+            this.disabled = true;
+            this.textContent = 'Generating PDF...';
 
-            // Skill and assessment names
-            const skillNames = [];
-            const assessmentNames = [];
-            for (let i = 1; i < skillRow.cells.length; i++) {
-                skillNames.push(skillRow.cells[i].textContent);
-                assessmentNames.push(assessmentRow.cells[i].textContent);
-            }
-            data.push(['', ...skillNames]);
-            data.push(['', ...assessmentNames]);
+            // Wait for charts to render
+            setTimeout(() => {
+                // Capture the entire body
+                html2canvas(document.body, {scale: 2}).then(canvas => {
+                    const imgData = canvas.toDataURL('image/png');
+                    const pdf = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
 
-            // Student scores
-            const rows = tableBody.querySelectorAll('tr');
-            rows.forEach(row => {
-                const rowData = [];
-                rowData.push(row.cells[0].textContent);
-                for (let i = 1; i < row.cells.length; i++) {
-                    const score = row.cells[i].querySelector('select').value;
-                    rowData.push(score);
-                }
-                data.push(rowData);
-            });
+                    // Calculate the number of pages needed
+                    const imgWidth = 297; // A4 width in mm
+                    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-            // Convert to CSV
-            let csvContent = "data:text/csv;charset=utf-8,";
+                    let position = 0;
+                    let heightLeft = imgHeight;
 
-            data.forEach(rowArray => {
-                const row = rowArray.join(",");
-                csvContent += row + "\r\n";
-            });
+                    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                    heightLeft -= 210;
 
-            // Create a link to download
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "gradebook.csv");
-            document.body.appendChild(link); // Required for FF
+                    while (heightLeft > 0) {
+                        position = heightLeft - imgHeight;
+                        pdf.addPage();
+                        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+                        heightLeft -= 210;
+                    }
 
-            link.click(); // This will download the data file named "gradebook.csv"
-            document.body.removeChild(link);
+                    pdf.save('AssignmentSpreadsheet.pdf');
+
+                    // Re-enable the download button
+                    document.getElementById('downloadBtn').disabled = false;
+                    document.getElementById('downloadBtn').textContent = 'Download PDF';
+                });
+            }, 1000); // Adjust the timeout as needed
         });
 
     </script>
