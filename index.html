@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Gradebook</title>
+    <title>Assignment Spreadsheet</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -54,6 +54,12 @@
         .score-1 {
             background-color: #ff1837;
         }
+        .score-N {
+            background-color: #ff00a7;
+        }
+        .score-default {
+            background-color: #cccccc; /* Gray for default */
+        }
         .chart-container {
             width: 100%;
             position: relative;
@@ -83,7 +89,7 @@
     </style>
 </head>
 <body>
-    <h1>Gradebook</h1>
+    <h1>Assignment Spreadsheet</h1>
 
     <div id="controls">
         <button id="addStudentBtn">Add Student</button>
@@ -111,8 +117,9 @@
         </tbody>
     </table>
 
-    <!-- Include Chart.js from CDN -->
+    <!-- Include Chart.js and ChartDataLabels from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
 
     <script>
         // Initialize variables
@@ -212,9 +219,9 @@
             const scoreCell = document.createElement('td');
 
             const select = document.createElement('select');
-            select.className = 'score-select';
+            select.className = 'score-select score-default';
             select.dataset.skillIndex = skillIndex;
-            const scores = [4, 3, 2, 1];
+            const scores = ['', 4, 3, 2, 1, 'N']; // Include blank option and 'N'
             scores.forEach(score => {
                 const option = document.createElement('option');
                 option.value = score;
@@ -239,7 +246,12 @@
         // Function to update cell background color based on score
         function updateCellColor(selectElement) {
             const score = selectElement.value;
-            selectElement.className = 'score-select score-' + score;
+            selectElement.className = 'score-select';
+            if (score === '') {
+                selectElement.classList.add('score-default');
+            } else {
+                selectElement.classList.add('score-' + score);
+            }
         }
 
         // Function to create chart
@@ -258,13 +270,14 @@
             const chart = new Chart(ctx, {
                 type: 'doughnut',
                 data: {
-                    labels: ['4', '3', '2', '1'],
+                    labels: ['4', '3', '2', '1', 'N'],
                     datasets: [{
-                        data: [0, 0, 0, 0],
-                        backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837'],
+                        data: [0, 0, 0, 0, 0],
+                        backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837', '#ff00a7'],
                     }]
                 },
                 options: {
+                    plugins: [ChartDataLabels],
                     responsive: false,
                     maintainAspectRatio: false,
                     plugins: {
@@ -273,12 +286,22 @@
                             position: 'top',
                         },
                         tooltip: {
+                            enabled: true,
                             callbacks: {
                                 label: function(context) {
                                     const label = context.label || '';
                                     const value = context.raw;
                                     return label + ': ' + value + '%';
                                 }
+                            }
+                        },
+                        datalabels: {
+                            formatter: function(value, context) {
+                                return value > 0 ? value + '%' : '';
+                            },
+                            color: '#fff',
+                            font: {
+                                weight: 'bold'
                             }
                         }
                     }
@@ -314,20 +337,25 @@
 
         // Function to update a single chart
         function updateChart(skillIndex) {
-            const scoreCounts = {4: 0, 3: 0, 2: 0, 1: 0};
+            const scoreCounts = {'4': 0, '3': 0, '2': 0, '1': 0, 'N': 0};
+            let total = 0;
             const selects = document.querySelectorAll('.score-select[data-skill-index="' + skillIndex + '"]');
             selects.forEach(select => {
                 const score = select.value;
-                scoreCounts[score]++;
+                if (score !== '') {
+                    scoreCounts[score]++;
+                    total++;
+                }
             });
 
-            const total = selects.length;
-            const percentages = [
-                ((scoreCounts[4] / total) * 100).toFixed(2),
-                ((scoreCounts[3] / total) * 100).toFixed(2),
-                ((scoreCounts[2] / total) * 100).toFixed(2),
-                ((scoreCounts[1] / total) * 100).toFixed(2)
-            ];
+            // Avoid division by zero
+            const percentages = total > 0 ? [
+                ((scoreCounts['4'] / total) * 100).toFixed(2),
+                ((scoreCounts['3'] / total) * 100).toFixed(2),
+                ((scoreCounts['2'] / total) * 100).toFixed(2),
+                ((scoreCounts['1'] / total) * 100).toFixed(2),
+                ((scoreCounts['N'] / total) * 100).toFixed(2)
+            ] : [0, 0, 0, 0, 0];
 
             const chart = charts[skillIndex];
             chart.data.datasets[0].data = percentages;
