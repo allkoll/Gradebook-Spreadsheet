@@ -1,9 +1,7 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Skill-Based Gradebook</title>
+    <title>Gradebook</title>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -12,20 +10,37 @@
         h1 {
             text-align: center;
         }
+        #controls {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        #controls button {
+            margin: 5px;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
         th, td {
-            border: 1px solid #ccc;
-            padding: 10px;
+            border: 1px solid #000;
+            padding: 5px;
             text-align: center;
+            word-wrap: break-word;
+        }
+        th[contenteditable="true"]:focus, td[contenteditable="true"]:focus {
+            outline: 2px solid blue;
         }
         .score-select {
             width: 100%;
-            padding: 5px;
+            padding: 2px;
+            color: #000;
+            font-weight: bold;
             border: none;
-            font-size: 14px;
+            outline: none;
+            appearance: none;
+            -moz-appearance: none;
+            -webkit-appearance: none;
         }
         .score-4 {
             background-color: #00c5ff;
@@ -41,145 +56,337 @@
         }
         .chart-container {
             width: 100%;
-            margin-top: 20px;
-            display: flex;
-            justify-content: center;
+            position: relative;
+            height: 150px; /* Adjust as needed */
+            margin-bottom: 20px;
         }
-        canvas {
-            margin: 10px;
+        .chart-wrapper {
+            position: absolute;
+            top: 0;
+            /* width and left position will be set dynamically */
+        }
+        .chart-wrapper canvas {
+            width: 100% !important;
+            height: 150px !important; /* Match the container height */
+        }
+        #downloadBtn {
+            display: block;
+            margin: 20px auto;
+        }
+        /* Adjust table column widths */
+        #gradeTable th, #gradeTable td {
+            width: 80px;
+        }
+        #gradeTable th:first-child, #gradeTable td:first-child {
+            width: 150px; /* Adjust as needed for the 'Student' column */
         }
     </style>
 </head>
 <body>
-    <h1>Skill-Based Gradebook</h1>
+    <h1>Gradebook</h1>
 
-    <table id="gradebook">
+    <div id="controls">
+        <button id="addStudentBtn">Add Student</button>
+        <button id="addSkillBtn">Add Column</button>
+        <button id="downloadBtn">Download Spreadsheet</button>
+    </div>
+
+    <div class="chart-container" id="chartContainer">
+        <!-- Charts will be added here -->
+    </div>
+
+    <table id="gradeTable">
         <thead>
-            <tr>
-                <th>Student</th>
-                <th>Skill 1</th>
-                <th>Skill 2</th>
-                <th>Skill 3</th>
-                <th>Overall Proficiency</th>
+            <tr id="skillRow">
+                <th contenteditable="false">Student</th>
+                <!-- Skill names will be added here -->
+            </tr>
+            <tr id="assessmentRow">
+                <th></th>
+                <!-- Assessment names will be added here -->
             </tr>
         </thead>
         <tbody>
-            <!-- Sample students -->
-            <tr>
-                <td>Student 1</td>
-                <td><select class="score-select score-4" data-skill="1"><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select></td>
-                <td><select class="score-select score-3" data-skill="2"><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select></td>
-                <td><select class="score-select score-2" data-skill="3"><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select></td>
-                <td id="student1-overall">3.0</td>
-            </tr>
-            <tr>
-                <td>Student 2</td>
-                <td><select class="score-select score-2" data-skill="1"><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select></td>
-                <td><select class="score-select score-4" data-skill="2"><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select></td>
-                <td><select class="score-select score-1" data-skill="3"><option value="4">4</option><option value="3">3</option><option value="2">2</option><option value="1">1</option></select></td>
-                <td id="student2-overall">2.3</td>
-            </tr>
+            <!-- Student rows will be added here -->
         </tbody>
     </table>
 
-    <div class="chart-container">
-        <canvas id="skill1Chart"></canvas>
-        <canvas id="skill2Chart"></canvas>
-        <canvas id="skill3Chart"></canvas>
-    </div>
-
-    <!-- Include Chart.js -->
+    <!-- Include Chart.js from CDN -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <script>
-        // Calculate overall proficiency
-        const calculateProficiency = () => {
-            const rows = document.querySelectorAll("tbody tr");
-            rows.forEach((row, index) => {
-                let totalScore = 0;
-                const selects = row.querySelectorAll("select");
-                selects.forEach(select => {
-                    totalScore += parseInt(select.value);
-                });
-                const average = (totalScore / selects.length).toFixed(1);
-                document.getElementById(`student${index + 1}-overall`).textContent = average;
-            });
-        };
+        // Initialize variables
+        const gradeTable = document.getElementById('gradeTable');
+        const skillRow = document.getElementById('skillRow');
+        const assessmentRow = document.getElementById('assessmentRow');
+        const tableBody = gradeTable.querySelector('tbody');
+        const chartContainer = document.getElementById('chartContainer');
+        let skills = [];
 
-        // Update chart data
-        const updateChartData = (chart, skillIndex) => {
-            const counts = [0, 0, 0, 0]; // 4 proficiency levels
-            const selects = document.querySelectorAll(`select[data-skill="${skillIndex}"]`);
+        // Function to initialize the table with 10 skills/assessments
+        function initializeSkills() {
+            for (let i = 0; i < 10; i++) {
+                addSkill('Skill', 'Assessment');
+            }
+        }
+
+        // Function to initialize the table with 10 students
+        function initializeStudents() {
+            for (let i = 1; i <= 10; i++) {
+                addStudent('Student ' + i);
+            }
+        }
+
+        // Function to add a new skill/assessment column
+        document.getElementById('addSkillBtn').addEventListener('click', function() {
+            addSkill('Skill', 'Assessment');
+        });
+
+        // Function to add a new student
+        document.getElementById('addStudentBtn').addEventListener('click', function() {
+            const studentNumber = tableBody.querySelectorAll('tr').length + 1;
+            addStudent('Student ' + studentNumber);
+        });
+
+        // Function to add a student
+        function addStudent(studentName) {
+            const row = document.createElement('tr');
+
+            const studentCell = document.createElement('td');
+            studentCell.contentEditable = true;
+            studentCell.textContent = studentName;
+            row.appendChild(studentCell);
+
+            // Add score cells for existing skills
+            for (let j = 0; j < skills.length; j++) {
+                const scoreCell = createScoreCell(j);
+                row.appendChild(scoreCell);
+            }
+
+            tableBody.appendChild(row);
+        }
+
+        // Function to add a skill
+        function addSkill(skillName, assessmentName) {
+            const skillIndex = skills.length;
+            skills.push({ skillName, assessmentName });
+
+            // Add skill and assessment headers
+            const skillHeader = document.createElement('th');
+            skillHeader.contentEditable = true;
+            skillHeader.textContent = skillName;
+            skillHeader.dataset.skillIndex = skillIndex;
+            skillRow.appendChild(skillHeader);
+
+            const assessmentHeader = document.createElement('th');
+            assessmentHeader.contentEditable = true;
+            assessmentHeader.textContent = assessmentName;
+            assessmentHeader.dataset.skillIndex = skillIndex;
+            assessmentRow.appendChild(assessmentHeader);
+
+            // Add event listeners to header cells to update skill names
+            skillHeader.addEventListener('blur', function() {
+                skills[skillIndex].skillName = skillHeader.textContent;
+            });
+
+            assessmentHeader.addEventListener('blur', function() {
+                skills[skillIndex].assessmentName = assessmentHeader.textContent;
+            });
+
+            // Add score cells to each student row
+            const studentRows = tableBody.querySelectorAll('tr');
+            studentRows.forEach(row => {
+                const scoreCell = createScoreCell(skillIndex);
+                row.appendChild(scoreCell);
+            });
+
+            // Create chart
+            createChart(skillIndex);
+
+            // Update charts
+            updateCharts();
+        }
+
+        // Function to create score cell
+        function createScoreCell(skillIndex) {
+            const scoreCell = document.createElement('td');
+
+            const select = document.createElement('select');
+            select.className = 'score-select';
+            select.dataset.skillIndex = skillIndex;
+            const scores = [4, 3, 2, 1];
+            scores.forEach(score => {
+                const option = document.createElement('option');
+                option.value = score;
+                option.text = score;
+                select.appendChild(option);
+            });
+
+            // Event listener to update cell color and charts
+            select.addEventListener('change', function() {
+                updateCellColor(select);
+                updateCharts();
+            });
+
+            scoreCell.appendChild(select);
+
+            // Initialize cell color
+            updateCellColor(select);
+
+            return scoreCell;
+        }
+
+        // Function to update cell background color based on score
+        function updateCellColor(selectElement) {
+            const score = selectElement.value;
+            selectElement.className = 'score-select score-' + score;
+        }
+
+        // Function to create chart
+        const charts = [];
+
+        function createChart(skillIndex) {
+            const canvas = document.createElement('canvas');
+            canvas.id = 'pieChart-' + skillIndex;
+            const chartWrapper = document.createElement('div');
+            chartWrapper.className = 'chart-wrapper';
+            chartWrapper.id = 'chartWrapper-' + skillIndex;
+            chartWrapper.appendChild(canvas);
+            chartContainer.appendChild(chartWrapper);
+
+            const ctx = canvas.getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['4', '3', '2', '1'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837'],
+                    }]
+                },
+                options: {
+                    responsive: false,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw;
+                                    return label + ': ' + value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            charts.push(chart);
+
+            // Adjust chart position
+            adjustChartPositions();
+        }
+
+        // Function to adjust chart positions
+        function adjustChartPositions() {
+            const tableRect = gradeTable.getBoundingClientRect();
+            const headers = skillRow.querySelectorAll('th');
+            headers.forEach((header, index) => {
+                if (index === 0) return; // Skip the first 'Student' column
+                const rect = header.getBoundingClientRect();
+                const left = rect.left - tableRect.left;
+                const width = rect.width;
+                const chartWrapper = document.getElementById('chartWrapper-' + (index - 1));
+                chartWrapper.style.left = left + 'px';
+                chartWrapper.style.width = width + 'px';
+            });
+        }
+
+        // Function to update all charts
+        function updateCharts() {
+            for (let skillIndex = 0; skillIndex < skills.length; skillIndex++) {
+                updateChart(skillIndex);
+            }
+        }
+
+        // Function to update a single chart
+        function updateChart(skillIndex) {
+            const scoreCounts = {4: 0, 3: 0, 2: 0, 1: 0};
+            const selects = document.querySelectorAll('.score-select[data-skill-index="' + skillIndex + '"]');
             selects.forEach(select => {
-                counts[4 - select.value]++;
+                const score = select.value;
+                scoreCounts[score]++;
             });
-            chart.data.datasets[0].data = counts;
+
+            const total = selects.length;
+            const percentages = [
+                ((scoreCounts[4] / total) * 100).toFixed(2),
+                ((scoreCounts[3] / total) * 100).toFixed(2),
+                ((scoreCounts[2] / total) * 100).toFixed(2),
+                ((scoreCounts[1] / total) * 100).toFixed(2)
+            ];
+
+            const chart = charts[skillIndex];
+            chart.data.datasets[0].data = percentages;
             chart.update();
-        };
+        }
 
-        // Chart.js setup for each skill
-        const skill1Chart = new Chart(document.getElementById("skill1Chart").getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: ['4', '3', '2', '1'],
-                datasets: [{
-                    label: 'Skill 1',
-                    data: [0, 0, 0, 0],
-                    backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837']
-                }]
-            },
-            options: {
-                responsive: false,
-                maintainAspectRatio: false
+        // Adjust chart positions when window is resized
+        window.addEventListener('resize', adjustChartPositions);
+
+        // Initialize table with 10 skills and 10 students
+        initializeSkills();
+        initializeStudents();
+
+        // Download spreadsheet functionality
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            // Collect data
+            const data = [];
+
+            // Skill and assessment names
+            const skillNames = [];
+            const assessmentNames = [];
+            for (let i = 1; i < skillRow.cells.length; i++) {
+                skillNames.push(skillRow.cells[i].textContent);
+                assessmentNames.push(assessmentRow.cells[i].textContent);
             }
-        });
+            data.push(['', ...skillNames]);
+            data.push(['', ...assessmentNames]);
 
-        const skill2Chart = new Chart(document.getElementById("skill2Chart").getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: ['4', '3', '2', '1'],
-                datasets: [{
-                    label: 'Skill 2',
-                    data: [0, 0, 0, 0],
-                    backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837']
-                }]
-            },
-            options: {
-                responsive: false,
-                maintainAspectRatio: false
-            }
-        });
-
-        const skill3Chart = new Chart(document.getElementById("skill3Chart").getContext('2d'), {
-            type: 'doughnut',
-            data: {
-                labels: ['4', '3', '2', '1'],
-                datasets: [{
-                    label: 'Skill 3',
-                    data: [0, 0, 0, 0],
-                    backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837']
-                }]
-            },
-            options: {
-                responsive: false,
-                maintainAspectRatio: false
-            }
-        });
-
-        // Update overall proficiency and charts on score change
-        document.querySelectorAll('.score-select').forEach(select => {
-            select.addEventListener('change', () => {
-                calculateProficiency();
-                updateChartData(skill1Chart, 1);
-                updateChartData(skill2Chart, 2);
-                updateChartData(skill3Chart, 3);
+            // Student scores
+            const rows = tableBody.querySelectorAll('tr');
+            rows.forEach(row => {
+                const rowData = [];
+                rowData.push(row.cells[0].textContent);
+                for (let i = 1; i < row.cells.length; i++) {
+                    const score = row.cells[i].querySelector('select').value;
+                    rowData.push(score);
+                }
+                data.push(rowData);
             });
+
+            // Convert to CSV
+            let csvContent = "data:text/csv;charset=utf-8,";
+
+            data.forEach(rowArray => {
+                const row = rowArray.join(",");
+                csvContent += row + "\r\n";
+            });
+
+            // Create a link to download
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "gradebook.csv");
+            document.body.appendChild(link); // Required for FF
+
+            link.click(); // This will download the data file named "gradebook.csv"
+            document.body.removeChild(link);
         });
 
-        // Initial chart and proficiency calculation
-        calculateProficiency();
-        updateChartData(skill1Chart, 1);
-        updateChartData(skill2Chart, 2);
-        updateChartData(skill3Chart, 3);
     </script>
 </body>
 </html>
