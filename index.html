@@ -10,30 +10,34 @@
         h1 {
             text-align: center;
         }
-        label {
-            margin-right: 10px;
-        }
         #controls {
             margin-bottom: 20px;
             text-align: center;
         }
+        #controls input {
+            margin: 5px;
+        }
         table {
-            width: 50%;
-            margin: 0 auto 20px auto;
+            width: 100%;
             border-collapse: collapse;
+            table-layout: fixed;
         }
         th, td {
             border: 1px solid #000;
             padding: 5px;
             text-align: center;
+            word-wrap: break-word;
         }
         .score-select {
-            width: 60px;
+            width: 100%;
             padding: 2px;
             color: #000;
             font-weight: bold;
             border: none;
             outline: none;
+            appearance: none;
+            -moz-appearance: none;
+            -webkit-appearance: none;
         }
         .score-4 {
             background-color: #00c5ff;
@@ -47,13 +51,23 @@
         .score-1 {
             background-color: #ff1837;
         }
-        #pieChartContainer {
-            width: 50%;
-            margin: 0 auto;
+        .chart-container {
+            width: 100%;
+            display: flex;
+            justify-content: space-around;
+            margin-bottom: -50px; /* Adjust as needed */
+        }
+        .chart-wrapper {
+            width: calc((100% - 100px) / var(--skill-count));
+            position: relative;
+        }
+        .chart-wrapper canvas {
+            width: 100%;
+            height: auto;
         }
         #downloadBtn {
             display: block;
-            margin: 0 auto;
+            margin: 20px auto;
         }
     </style>
 </head>
@@ -61,27 +75,30 @@
     <h1>Gradebook</h1>
 
     <div id="controls">
-        <label for="skillName">Skill Name:</label>
-        <input type="text" id="skillName" placeholder="Enter skill name">
-        <label for="assessmentName">Assessment Name:</label>
-        <input type="text" id="assessmentName" placeholder="Enter assessment name">
+        <input type="text" id="skillInput" placeholder="Enter skill name">
+        <input type="text" id="assessmentInput" placeholder="Enter assessment name">
+        <button id="addSkillBtn">Add Skill</button>
+    </div>
+
+    <div class="chart-container" id="chartContainer">
+        <!-- Charts will be added here -->
     </div>
 
     <table id="gradeTable">
         <thead>
-            <tr>
+            <tr id="skillRow">
                 <th>Student</th>
-                <th>Score</th>
+                <!-- Skill names will be added here -->
+            </tr>
+            <tr id="assessmentRow">
+                <th></th>
+                <!-- Assessment names will be added here -->
             </tr>
         </thead>
         <tbody>
-            <!-- Rows will be added by JavaScript -->
+            <!-- Student rows will be added here -->
         </tbody>
     </table>
-
-    <div id="pieChartContainer">
-        <canvas id="pieChart"></canvas>
-    </div>
 
     <button id="downloadBtn">Download Spreadsheet</button>
 
@@ -89,21 +106,70 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
     <script>
-        // JavaScript code to create table rows and functionality
-        const tableBody = document.querySelector('#gradeTable tbody');
+        // Initialize variables
+        const gradeTable = document.getElementById('gradeTable');
+        const skillRow = document.getElementById('skillRow');
+        const assessmentRow = document.getElementById('assessmentRow');
+        const tableBody = gradeTable.querySelector('tbody');
+        const chartContainer = document.getElementById('chartContainer');
+        let skills = [];
 
-        // Create table rows for students 1-30
-        for (let i = 1; i <= 30; i++) {
-            const row = document.createElement('tr');
+        // Function to add a new skill/assessment column
+        document.getElementById('addSkillBtn').addEventListener('click', function() {
+            const skillName = document.getElementById('skillInput').value.trim() || 'Skill';
+            const assessmentName = document.getElementById('assessmentInput').value.trim() || 'Assessment';
+            addSkill(skillName, assessmentName);
+            document.getElementById('skillInput').value = '';
+            document.getElementById('assessmentInput').value = '';
+        });
 
-            const studentCell = document.createElement('td');
-            studentCell.textContent = 'Student ' + i;
-            row.appendChild(studentCell);
+        // Function to add a skill
+        function addSkill(skillName, assessmentName) {
+            const skillIndex = skills.length;
+            skills.push({ skillName, assessmentName });
 
+            // Update CSS variable for skill count
+            document.documentElement.style.setProperty('--skill-count', skills.length);
+
+            // Add chart container
+            const chartWrapper = document.createElement('div');
+            chartWrapper.className = 'chart-wrapper';
+            chartWrapper.id = 'chartWrapper-' + skillIndex;
+            const canvas = document.createElement('canvas');
+            canvas.id = 'pieChart-' + skillIndex;
+            chartWrapper.appendChild(canvas);
+            chartContainer.appendChild(chartWrapper);
+
+            // Add skill and assessment headers
+            const skillHeader = document.createElement('th');
+            skillHeader.textContent = skillName;
+            skillRow.appendChild(skillHeader);
+
+            const assessmentHeader = document.createElement('th');
+            assessmentHeader.textContent = assessmentName;
+            assessmentRow.appendChild(assessmentHeader);
+
+            // Add score cells to each student row
+            const studentRows = tableBody.querySelectorAll('tr');
+            studentRows.forEach(row => {
+                const scoreCell = createScoreCell(skillIndex);
+                row.appendChild(scoreCell);
+            });
+
+            // Create chart
+            createChart(skillIndex);
+
+            // Update charts
+            updateCharts();
+        }
+
+        // Function to create score cell
+        function createScoreCell(skillIndex) {
             const scoreCell = document.createElement('td');
 
             const select = document.createElement('select');
             select.className = 'score-select';
+            select.dataset.skillIndex = skillIndex;
             const scores = [4, 3, 2, 1];
             scores.forEach(score => {
                 const option = document.createElement('option');
@@ -112,20 +178,41 @@
                 select.appendChild(option);
             });
 
-            // Event listener to update cell color and chart
+            // Event listener to update cell color and charts
             select.addEventListener('change', function() {
                 updateCellColor(select);
-                updateChart();
+                updateCharts();
             });
 
             scoreCell.appendChild(select);
-            row.appendChild(scoreCell);
-
-            tableBody.appendChild(row);
 
             // Initialize cell color
             updateCellColor(select);
+
+            return scoreCell;
         }
+
+        // Function to create student rows
+        function createStudentRows() {
+            for (let i = 1; i <= 30; i++) {
+                const row = document.createElement('tr');
+
+                const studentCell = document.createElement('td');
+                studentCell.textContent = 'Student ' + i;
+                row.appendChild(studentCell);
+
+                // Add score cells for existing skills
+                for (let j = 0; j < skills.length; j++) {
+                    const scoreCell = createScoreCell(j);
+                    row.appendChild(scoreCell);
+                }
+
+                tableBody.appendChild(row);
+            }
+        }
+
+        // Initialize student rows
+        createStudentRows();
 
         // Function to update cell background color based on score
         function updateCellColor(selectElement) {
@@ -133,12 +220,54 @@
             selectElement.className = 'score-select score-' + score;
         }
 
-        // Function to update the pie chart
-        let pieChart;
+        // Function to create chart
+        const charts = [];
 
-        function updateChart() {
+        function createChart(skillIndex) {
+            const ctx = document.getElementById('pieChart-' + skillIndex).getContext('2d');
+            const chart = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['4', '3', '2', '1'],
+                    datasets: [{
+                        data: [0, 0, 0, 0],
+                        backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw;
+                                    return label + ': ' + value + '%';
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+            charts.push(chart);
+        }
+
+        // Function to update all charts
+        function updateCharts() {
+            for (let skillIndex = 0; skillIndex < skills.length; skillIndex++) {
+                updateChart(skillIndex);
+            }
+        }
+
+        // Function to update a single chart
+        function updateChart(skillIndex) {
             const scoreCounts = {4: 0, 3: 0, 2: 0, 1: 0};
-            const selects = document.querySelectorAll('.score-select');
+            const selects = document.querySelectorAll('.score-select[data-skill-index="' + skillIndex + '"]');
             selects.forEach(select => {
                 const score = select.value;
                 scoreCounts[score]++;
@@ -152,63 +281,44 @@
                 ((scoreCounts[1] / total) * 100).toFixed(2)
             ];
 
-            const ctx = document.getElementById('pieChart').getContext('2d');
-
-            if (pieChart) {
-                pieChart.data.datasets[0].data = percentages;
-                pieChart.update();
-            } else {
-                pieChart = new Chart(ctx, {
-                    type: 'pie',
-                    data: {
-                        labels: ['4', '3', '2', '1'],
-                        datasets: [{
-                            data: percentages,
-                            backgroundColor: ['#00c5ff', '#00ff04', '#fdff00', '#ff1837'],
-                        }]
-                    },
-                    options: {
-                        plugins: {
-                            legend: {
-                                display: true,
-                                position: 'top',
-                            },
-                            tooltip: {
-                                callbacks: {
-                                    label: function(context) {
-                                        const label = context.label || '';
-                                        const value = context.raw;
-                                        return label + ': ' + value + '%';
-                                    }
-                                }
-                            }
-                        }
-                    }
-                });
-            }
+            const chart = charts[skillIndex];
+            chart.data.datasets[0].data = percentages;
+            chart.update();
         }
 
-        // Initial chart update
-        updateChart();
+        // Initial skill and assessment
+        addSkill('Skill', 'Assessment');
 
         // Download spreadsheet functionality
         document.getElementById('downloadBtn').addEventListener('click', function() {
             // Collect data
-            const skillName = document.getElementById('skillName').value;
-            const assessmentName = document.getElementById('assessmentName').value;
+            const data = [];
 
-            const data = [['Student', 'Score']];
-            const rows = document.querySelectorAll('#gradeTable tbody tr');
+            // Skill and assessment names
+            const skillNames = [];
+            const assessmentNames = [];
+            for (let i = 1; i < skillRow.cells.length; i++) {
+                skillNames.push(skillRow.cells[i].textContent);
+                assessmentNames.push(assessmentRow.cells[i].textContent);
+            }
+            data.push(['', ...skillNames]);
+            data.push(['', ...assessmentNames]);
+
+            // Student scores
+            const rows = tableBody.querySelectorAll('tr');
             rows.forEach(row => {
-                const student = row.cells[0].textContent;
-                const score = row.cells[1].querySelector('select').value;
-                data.push([student, score]);
+                const rowData = [];
+                rowData.push(row.cells[0].textContent);
+                for (let i = 1; i < row.cells.length; i++) {
+                    const score = row.cells[i].querySelector('select').value;
+                    rowData.push(score);
+                }
+                data.push(rowData);
             });
 
             // Convert to CSV
             let csvContent = "data:text/csv;charset=utf-8,";
-            csvContent += 'Skill Name,' + skillName + '\n';
-            csvContent += 'Assessment Name,' + assessmentName + '\n\n';
+
             data.forEach(rowArray => {
                 const row = rowArray.join(",");
                 csvContent += row + "\r\n";
