@@ -54,20 +54,30 @@
         .chart-container {
             width: 100%;
             display: flex;
-            justify-content: space-around;
-            margin-bottom: -50px; /* Adjust as needed */
+            justify-content: flex-start;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
         }
         .chart-wrapper {
-            width: calc((100% - 100px) / var(--skill-count));
+            width: 120px; /* Approx 2 inches at 96dpi */
+            height: 120px;
+            margin: 5px;
             position: relative;
         }
         .chart-wrapper canvas {
-            width: 100%;
-            height: auto;
+            width: 100% !important;
+            height: 100% !important;
         }
         #downloadBtn {
             display: block;
             margin: 20px auto;
+        }
+        /* Adjust table column widths */
+        #gradeTable th, #gradeTable td {
+            width: 80px;
+        }
+        #gradeTable th:first-child, #gradeTable td:first-child {
+            width: 100px; /* Adjust as needed for the 'Student' column */
         }
     </style>
 </head>
@@ -127,9 +137,6 @@
         function addSkill(skillName, assessmentName) {
             const skillIndex = skills.length;
             skills.push({ skillName, assessmentName });
-
-            // Update CSS variable for skill count
-            document.documentElement.style.setProperty('--skill-count', skills.length);
 
             // Add chart container
             const chartWrapper = document.createElement('div');
@@ -235,7 +242,7 @@
                     }]
                 },
                 options: {
-                    responsive: true,
+                    responsive: false,
                     maintainAspectRatio: false,
                     plugins: {
                         legend: {
