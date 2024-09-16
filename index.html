@@ -95,6 +95,12 @@
         .letter-grade {
             font-weight: bold;
         }
+        /* Rotate text in header cells */
+        .vertical-text {
+            writing-mode: vertical-rl;
+            transform: rotate(180deg);
+            white-space: nowrap;
+        }
     </style>
 </head>
 <body>
@@ -115,14 +121,23 @@
             <!-- Proficiency Percentage Row -->
             <tr id="proficiencyRow" class="proficiency-row">
                 <th colspan="2">Proficiency %</th>
+                <th>SEP2 Avg</th>
+                <th>SEP4 Avg</th>
+                <th>SEP6 Avg</th>
                 <!-- Percentages will be added here -->
             </tr>
             <tr id="skillRow">
                 <th contenteditable="false">Student</th>
                 <th contenteditable="false">Letter Grade</th>
+                <th class="vertical-text">SEP2</th>
+                <th class="vertical-text">SEP4</th>
+                <th class="vertical-text">SEP6</th>
                 <!-- Skill dropdowns will be added here -->
             </tr>
             <tr id="assessmentRow">
+                <th></th>
+                <th></th>
+                <th></th>
                 <th></th>
                 <th></th>
                 <!-- Assessment names will be added here -->
@@ -131,12 +146,6 @@
         <tbody>
             <!-- Student rows will be added here -->
         </tbody>
-        <tfoot>
-            <tr id="sepAverages">
-                <th colspan="2">SEP Averages</th>
-                <!-- SEP averages will be added here -->
-            </tr>
-        </tfoot>
     </table>
 
     <!-- Include Chart.js, ChartDataLabels, jsPDF, and html2canvas from CDN -->
@@ -152,14 +161,13 @@
         const skillRow = document.getElementById('skillRow');
         const assessmentRow = document.getElementById('assessmentRow');
         const tableBody = gradeTable.querySelector('tbody');
-        const sepAveragesRow = document.getElementById('sepAverages');
         const chartContainer = document.getElementById('chartContainer');
         let skills = [];
         const seps = ['SEP2', 'SEP4', 'SEP6'];
 
-        // Function to initialize the table with 3 skills/assessments
+        // Function to initialize the table with 10 skills/assessments
         function initializeSkills() {
-            for (let i = 0; i < 3; i++) {
+            for (let i = 0; i < 10; i++) {
                 addSkill('Assessment ' + (i + 1));
             }
         }
@@ -196,12 +204,6 @@
             letterGradeCell.textContent = 'N/A';
             row.appendChild(letterGradeCell);
 
-            // Add score cells for existing skills
-            for (let j = 0; j < skills.length; j++) {
-                const scoreCell = createScoreCell(j);
-                row.appendChild(scoreCell);
-            }
-
             // Add SEP average cells
             seps.forEach(sep => {
                 const sepCell = document.createElement('td');
@@ -210,6 +212,12 @@
                 sepCell.textContent = 'N/A';
                 row.appendChild(sepCell);
             });
+
+            // Add score cells for existing skills
+            for (let j = 0; j < skills.length; j++) {
+                const scoreCell = createScoreCell(j);
+                row.appendChild(scoreCell);
+            }
 
             tableBody.appendChild(row);
         }
@@ -243,6 +251,7 @@
             skillSelect.addEventListener('change', function() {
                 skills[skillIndex].sep = skillSelect.value;
                 calculateSEPAverages();
+                calculateLetterGrades();
             });
 
             // Add assessment name cell
@@ -261,18 +270,8 @@
             const studentRows = tableBody.querySelectorAll('tr');
             studentRows.forEach(row => {
                 const scoreCell = createScoreCell(skillIndex);
-                // Insert before the SEP average cells
-                row.insertBefore(scoreCell, row.querySelector('.sep-average-cell'));
+                row.appendChild(scoreCell);
             });
-
-            // Adjust SEP averages row
-            if (sepAveragesRow.children.length === 2) {
-                seps.forEach(sep => {
-                    const sepHeader = document.createElement('th');
-                    sepHeader.textContent = sep;
-                    sepAveragesRow.appendChild(sepHeader);
-                });
-            }
 
             // Create chart
             createChart(skillIndex);
@@ -389,11 +388,11 @@
             const tableRect = gradeTable.getBoundingClientRect();
             const headers = skillRow.querySelectorAll('th');
             headers.forEach((header, index) => {
-                if (index <= 1) return; // Skip the first two columns
+                if (index <= 4) return; // Skip the first 5 columns (Student, Letter Grade, SEP2, SEP4, SEP6)
                 const rect = header.getBoundingClientRect();
                 const left = rect.left - tableRect.left;
                 const width = rect.width;
-                const chartWrapper = document.getElementById('chartWrapper-' + (index - 2));
+                const chartWrapper = document.getElementById('chartWrapper-' + (index - 5));
                 chartWrapper.style.left = left + 'px';
                 chartWrapper.style.width = width + 'px';
             });
@@ -437,8 +436,8 @@
         function updateProficiencyPercentages() {
             const proficiencyCells = proficiencyRow.querySelectorAll('th');
             proficiencyCells.forEach((cell, index) => {
-                if (index <= 1) return; // Skip the first two cells
-                const skillIndex = index - 2;
+                if (index <= 4) return; // Skip the first 5 cells
+                const skillIndex = index - 5;
                 const selects = document.querySelectorAll('.score-select[data-skill-index="' + skillIndex + '"]');
                 let total = 0;
                 let proficientCount = 0;
@@ -476,8 +475,8 @@
                 });
 
                 // Update SEP average cells
-                seps.forEach(sep => {
-                    const avgCell = row.querySelector('.sep-average-cell[data-sep="' + sep + '"]');
+                seps.forEach((sep, index) => {
+                    const avgCell = row.children[2 + index];
                     if (sepCounts[sep] > 0) {
                         const average = (sepSums[sep] / sepCounts[sep]).toFixed(2);
                         avgCell.textContent = average;
@@ -496,7 +495,7 @@
             studentRows.forEach(row => {
                 let totalAverage = 0;
                 let sepCount = 0;
-                const avgCells = row.querySelectorAll('.sep-average-cell');
+                const avgCells = [row.children[2], row.children[3], row.children[4]];
                 avgCells.forEach(cell => {
                     const avg = cell.dataset.average;
                     if (avg) {
@@ -528,7 +527,7 @@
         // Adjust chart positions when window is resized
         window.addEventListener('resize', adjustChartPositions);
 
-        // Initialize table with 3 skills and 10 students
+        // Initialize table with 10 skills and 10 students
         initializeSkills();
         initializeStudents();
 
